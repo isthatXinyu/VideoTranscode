@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Video</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="upload-container">
+        <h1>Welcome</h1>
+        <h1>Upload Video</h1>
+        <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
+            <label for="video">Choose a video file:</label>
+            <input type="file" id="video" name="video" accept="video/*" required><br><br>
+
+            <!-- Video Preview -->
+            <label for="videoPreview">Video Preview:</label><br>
+            <video id="videoPreview" width="100%" controls style="display:none;">
+                Your browser does not support the video tag.
+            </video><br><br>
+
+            <label for="formats">Select output format:</label><br>
+            <input type="radio" id="mp4" name="format" value="mp4" required>
+            <label for="mp4">MP4</label><br>
+            <input type="radio" id="avi" name="format" value="avi" required>
+            <label for="avi">AVI</label><br>
+            <input type="radio" id="webm" name="format" value="webm" required>
+            <label for="webm">WebM</label><br><br>
+
+            <label for="resolutions">Select output resolution:</label><br>
+            <input type="radio" id="1080p" name="resolution" value="1080" required>
+            <label for="1080p">1080p</label><br>
+            <input type="radio" id="720p" name="resolution" value="720" required>
+            <label for="720p">720p</label><br>
+            <input type="radio" id="480p" name="resolution" value="480" required>
+            <label for="480p">480p</label><br><br>
+
+            <button class="button-64" role="button" type="submit"><span class="text">Submit</span></button>
+        </form>
+
+        <!-- Progress bar -->
+        <div id="progress-container" style="display:none;">
+            <label for="progress">Transcoding Progress:</label>
+            <progress id="progress" value="0" max="100" style="width: 100%;"></progress>
+            <span id="progress-text">0%</span>
+        </div>
+
+        <!-- Download link -->
+        <div id="download-container" style="display:none;">
+            <h3>Transcoding Completed!</h3>
+            <a id="download-link" href="#" download>Download Transcoded Video</a>
+        </div>
+    </div>
+
+    <script>
+        // Video Preview
+        const videoInput = document.getElementById('video');
+        const videoPreview = document.getElementById('videoPreview');
+
+        videoInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const fileURL = URL.createObjectURL(file);
+                videoPreview.src = fileURL;
+                videoPreview.style.display = 'block';
+            } else {
+                videoPreview.style.display = 'none';
+                videoPreview.src = '';
+            }
+        });
+
+        // Show the progress bar when the form is submitted
+        const form = document.getElementById('uploadForm');
+        form.onsubmit = function () {
+            document.getElementById('progress-container').style.display = 'block';
+
+            const eventSource = new EventSource('/progress');
+            const progressBar = document.getElementById('progress');
+            const progressText = document.getElementById('progress-text');
+            const downloadContainer = document.getElementById('download-container');
+            const downloadLink = document.getElementById('download-link');
+
+            eventSource.onmessage = function (event) {
+                const percent = event.data;
+                progressBar.value = percent;
+                progressText.innerText = percent + '%';
+
+                if (percent >= 100) {
+                    eventSource.close();
+                }
+            };
+
+            // Fetch the transcoding result after form submission
+            fetch('/upload', {
+                method: 'POST',
+                body: new FormData(form)
+            }).then(response => response.text())
+            .then(html => {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                const downloadLinkElement = tempDiv.querySelector('a');
+                if (downloadLinkElement) {
+                    downloadContainer.style.display = 'block';
+                    downloadLink.href = downloadLinkElement.href;
+                }
+            });
+
+            return false; // Prevent the form from submitting the traditional way
+        };
+    </script>
+</body>
+</html>
