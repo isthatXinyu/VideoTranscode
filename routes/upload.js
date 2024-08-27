@@ -29,6 +29,8 @@ const transcodeVideo = (
     path.extname(inputPath)
   )}_${resolution}p.${format}`;
 
+  let currentProgress = 0; // Define globally
+
   ffmpeg(inputPath)
     // Set output path
     .output(outputPath)
@@ -37,25 +39,25 @@ const transcodeVideo = (
     .videoCodec("libx264")
     // Resize the video to the specified resolution
     .size(`${resolution}x?`)
-    .on("progress", (progress) => {
-      // verify progress
-      console.log(`Processing: ${progress.percent}% done`);
-      if (onProgress) {
-        onProgress(progress.percent);
-      }
+    .on('progress', (progress) => {
+        console.log(`Processing: ${progress.percent}% done`);
+        currentProgress = progress.percent; // Update currentProgress
     })
     // Completed transcoding
-    .on("end", () => {
-      console.log(`Transcoding to ${format} at ${resolution}p completed.`);
-      callback(null, outputPath);
+    .on('end', () => {
+        console.log(`Transcoding to ${format} at ${resolution}p completed.`);
+        currentProgress = 100; // Set progress to 100% upon completion
+        res.send(`Video uploaded and transcoded successfully.`);
     })
     // Error handling
-    .on("error", (err) => {
-      console.error(`Transcoding error: ${err.message}`);
-      callback(err);
+    .on('error', (err) => {
+        console.error(`Transcoding error: ${err.message}`);
+        currentProgress = 0; // Reset progress in case of error
+        res.status(500).send('Error during transcoding.');
     })
     .run();
 };
+
 
 // SSE route to send progress updates
 router.get("/progress", (req, res) => {
