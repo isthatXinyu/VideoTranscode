@@ -19,4 +19,9 @@ router.post('/login', (req, res) => {
     }
 });
 
-// Render l
+// Render login page (without error)
+router.get('/', (req, res) => {
+    res.render('index', { errorMessage: null });  // Render without error message
+});
+
+module.exports = router;

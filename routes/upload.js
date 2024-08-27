@@ -27,3 +27,104 @@ const transcodeVideo = (
   const outputPath = `uploads/${path.basename(
     inputPath,
     path.extname(inputPath)
+  )}_${resolution}p.${format}`;
+
+  ffmpeg(inputPath)
+    // Set output path
+    .output(outputPath)
+    .outputFormat(format)
+    // Set video codec and size based on resolution
+    .videoCodec("libx264")
+    // Resize the video to the specified resolution
+    .size(`${resolution}x?`)
+    .on("progress", (progress) => {
+      // verify progress
+      console.log(`Processing: ${progress.percent}% done`);
+      if (onProgress) {
+        onProgress(progress.percent);
+      }
+    })
+    // Completed transcoding
+    .on("end", () => {
+      console.log(`Transcoding to ${format} at ${resolution}p completed.`);
+      callback(null, outputPath);
+    })
+    // Error handling
+    .on("error", (err) => {
+      console.error(`Transcoding error: ${err.message}`);
+      callback(err);
+    })
+    .run();
+};
+
+// SSE route to send progress updates
+router.get("/progress", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders(); // flush the headers to establish SSE with the client
+
+  const interval = setInterval(() => {
+    res.write(`data: ${currentProgress}\n\n`);
+  }, 1000);
+
+  req.on("close", () => {
+    clearInterval(interval);
+    res.end();
+  });
+});
+
+// Upload and transcode route
+router.post("/upload", upload.single("video"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).send("No file uploaded.");
+  }
+
+  const inputPath = req.file.path;
+  const format = req.body.format;
+  const resolution = req.body.resolution;
+
+  if (!format || !resolution) {
+    return res.status(400).send("Format and resolution must be selected.");
+  }
+
+  // Transcode the uploaded video into the selected format and resolution
+  transcodeVideo(
+    inputPath,
+    format,
+    resolution,
+    (percent) => {
+      currentProgress = percent;
+    },
+    (err, outputPath) => {
+      if (err) {
+        return res.status(500).send("Error during transcoding.");
+      }
+      currentProgress = 0; // reset progress after completion
+
+      // Send back the link to the transcoded video
+      const downloadLink = `/download/${path.basename(outputPath)}`;
+      res.send(`
+      Video uploaded and transcoded successfully.<br>
+      <a href="/download/${path.basename(
+        outputPath
+      )}" download>Download Transcoded Video</a>
+  `);
+    }
+  );
+});
+
+// Route to serve the transcoded video for download
+router.get("/download/:filename", (req, res) => {
+  const filename = req.params.filename;
+  const filepath = path.join(__dirname, "../uploads", filename);
+  console.log(`Attempting to download: ${filepath}`); // verify the file path
+  res.download(filepath, filename, (err) => {
+    if (err) {
+      console.error(`Error downloading file: ${err.message}`);
+      res.status(500).send("Error downloading the file.");
+    }
+  });
+});
+
+module.exports = router;
