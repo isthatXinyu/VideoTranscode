@@ -51,7 +51,6 @@ const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFil
       console.log(`Processing: ${progress.percent.toFixed(2)}% done`);
     })
     .on('end', async () => {
-      currentProgress = 100;
       console.log(`Transcoding to ${format} at ${resolution}p completed.`);
       originalVideo = originalFilename;
       outputVideo = outputPath;
