@@ -109,5 +109,33 @@
             return false; // Prevent the form from submitting the traditional way
         };
     </script>
+
+<script>
+    function updateProgress() {
+      fetch('/progress')
+        .then(response => response.json())
+        .then(data => {
+          const progressElement = document.getElementById('progress');
+          const progressText = document.getElementById('progress-text');
+          
+          progressElement.value = data.progress;
+          progressText.innerText = `${data.progress}%`;
+          
+          if (data.progress >= 100) {
+            clearInterval(progressInterval);
+
+            const downloadLink = document.getElementById('download-link');
+            const downloadContainer = document.getElementById('download-container');
+            
+            const downloadUrl = '/download';
+            downloadLink.href = downloadUrl; // set the download link
+            downloadContainer.style.display = 'block'; // show the download link
+            }
+        });
+    }
+  
+    const progressInterval = setInterval(updateProgress, 500);
+  </script>
+  
 </body>
 </html>

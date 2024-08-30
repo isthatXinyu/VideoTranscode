@@ -23,6 +23,13 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+let currentProgress = 0;
+let outputVideo = "";
+let originalVideo = "";
+router.get('/progress', (req, res) => {
+  res.json({progress: currentProgress});
+});
+
 // Function to transcode video
 const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFilename) => {
   const outputFilename = `${path.basename(inputPath, path.extname(inputPath))}_${resolution}p.${format}`;
@@ -40,11 +47,14 @@ const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFil
       console.log('FFmpeg process started with command:', commandLine);
     })
     .on('progress', progress => {
+      currentProgress = progress.percent.toFixed(2);
       console.log(`Processing: ${progress.percent.toFixed(2)}% done`);
     })
     .on('end', async () => {
+      currentProgress = 100;
       console.log(`Transcoding to ${format} at ${resolution}p completed.`);
-
+      originalVideo = originalFilename;
+      outputVideo = outputPath;
       // Update the video document with transcoded filename and status
       try {
         await Video.findByIdAndUpdate(videoId, {
@@ -62,20 +72,6 @@ const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFil
         else console.log('Original file deleted successfully.');
       });
 
-      // Serve the transcoded file for download
-      res.download(outputPath, originalFilename, err => {
-        if (err) {
-          console.error('Error downloading the file:', err);
-          res.status(500).send('Error downloading the file.');
-        } else {
-          console.log('File downloaded successfully.');
-          // Optionally, delete the transcoded file after download
-          // fs.unlink(outputPath, err => {
-          //   if (err) console.error('Error deleting transcoded file:', err);
-          //   else console.log('Transcoded file deleted successfully.');
-          // });
-        }
-      });
     })
     .on('error', async err => {
       console.error(`Transcoding error: ${err.message}`);
@@ -125,6 +121,7 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     const savedVideo = await video.save();
     console.log('Video document saved successfully:', savedVideo);
 
+    // res.json({ videoId: savedVideo._id });
     // Transcode the uploaded video into the selected format and resolution
     transcodeVideo(inputPath, format, resolution, res, savedVideo._id, originalFilename);
   } catch (err) {
@@ -132,5 +129,19 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     res.status(500).send('Internal server error.');
   }
 });
+
+router.get('/download', (req, res) => {
+      // Serve the transcoded file for download
+      res.download(outputVideo, originalVideo, err => {
+        if (err) {
+          console.error('Error downloading the file:', err);
+          res.status(500).send('Error downloading the file.');
+        } else {
+          console.log('File downloaded successfully.');
+        }
+      });
+}
+)
+
 
 module.exports = router;
