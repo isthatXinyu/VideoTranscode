@@ -31,6 +31,7 @@ router.get('/progress', (req, res) => {
 });
 
 // Function to transcode video
+// ffmpeg is developed under the guidance of chatgpt
 const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFilename) => {
   const outputFilename = `${path.basename(inputPath, path.extname(inputPath))}_${resolution}p.${format}`;
   const outputPath = path.resolve(__dirname, '../uploads/', outputFilename);
@@ -51,8 +52,9 @@ const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFil
       console.log(`Processing: ${progress.percent.toFixed(2)}% done`);
     })
     .on('end', async () => {
+      currentProgress = 100;
       console.log(`Transcoding to ${format} at ${resolution}p completed.`);
-      originalVideo = originalFilename;
+      originalVideo = outputFilename;
       outputVideo = outputPath;
       // Update the video document with transcoded filename and status
       try {

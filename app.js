@@ -13,7 +13,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // MongoDB connection using Mongoose
-mongoose.connect(process.env.MONGODB_URI, {
+// develped with guidance of mongodb.com
+mongoose.connect('mongodb+srv://xinyuqian1231:drcNf24jIcvctrrX@cluster0.tfta3j2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
     //useNewUrlParser: true,
     //useUnifiedTopology: true,
 })

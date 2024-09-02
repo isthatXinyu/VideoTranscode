@@ -18,8 +18,8 @@ Core criteria
 
 ### Docker image
 
-- **ECR Repository name**: isthatxinyu
-- **Video timestamp:** 0:15
+- **ECR Repository name**: n10366687-my-repo
+- **Video timestamp:** 0:00
 - **Relevant files:**
     - /Dockerfile 
 
@@ -33,26 +33,26 @@ Core criteria
 ### User login functionality
 
 - **One line description:** Implemented user authentication with JWTs, supporting session management and login protection.
-- **Video timestamp:** 0:45
+- **Video timestamp:** 0:48
 - **Relevant files:**
     - /routes/auth.js 
 
 ### User dependent functionality
 
-- **One line description:** Users can only see and manage their own uploaded videos. Admins have access to all videos.
+- **One line description:** Not fully implemented
 - **Video timestamp:** 1:00
 - **Relevant files:**
-    - /routes/video.js 
+    - /models/video.js 
     - /routes/upload.js 
 
 ### Web client
 
 - **One line description:** The web client is designed with a responsive UI allowing users to upload videos, select transcoding options, and download results.
-- **Video timestamp:** 0:45
+- **Video timestamp:** 1:00
 - **Relevant files:**
     - /views/index.ejs 
-    - /public/styles.css【11:0†source】
-    - /public/upload.html【12:0†source】
+    - /public/styles.css
+    - /public/upload.html
 
 ### REST API
 
@@ -69,71 +69,71 @@ Core criteria
 - **One line description:** Video files uploaded by users.
 - **Type:** Unstructured data.
 - **Rationale:** Videos are large files, stored separately, and managed without database integration for efficiency.
-- **Video timestamp:** 1:30
+- **Video timestamp:** 1:00
 - **Relevant files:**
     - /routes/upload.js 
-    - /routes/video.js 
+    - /models/video.js 
 
 #### Second kind
 
-- **One line description:** Metadata about videos, including ownership and transcoding progress.
-- **Type:** Structured data stored in MongoDB.
-- **Rationale:** Metadata needs to be queried efficiently to manage user interactions and transcoding processes.
-- **Video timestamp:** 1:45
+- **One line description:** Handles user authentication and authorization to secure access to video metadata and transcoding operations.
+- **Type:** Structured data stored in MongoDB. Authentication logic implemented to manage user sessions and access control.
+- **Rationale:** Metadata needs to be queried efficiently to manage user interactions and transcoding processes. Authentication ensures that only authorized users can access specific features, maintaining the security and integrity of user data and processes.
+- **Video timestamp:** 1:50
 - **Relevant files:**
     - /routes/upload.js 
-    - /routes/video.js 
+    - /models/video.js 
+    - /routes/auth.js 
 
 ### CPU intensive task
 
 - **One line description**: Video transcoding is performed using FFmpeg, which is a CPU-intensive process.
-- **Video timestamp:** 2:00
+- **Video timestamp:** 1:40
 - **Relevant files:**
-    - /routes/video.js 
+    - /routes/upload.js 
 
 ### CPU load testing method
 
 - **One line description**: Node.js script to generate multiple transcoding requests, pushing CPU usage above 90%.
-- **Video timestamp:** 2:30
-- **Relevant files:**
-    - /loadTest.js
+- **Video timestamp:** 1:40
 
 Additional criteria
 ------------------------------------------------
 
 ### Extensive REST API features
 
-- **One line description**: Supports advanced features such as pagination, filtering, and sorting.
+- **One line description**: Provides robust REST API functionalities tailored for video processing, including format and resolution selection, and progress tracking.
+Video timestamp: 1:00
+Relevant files:
+/routes/video.js
 - **Video timestamp:** 1:00
 - **Relevant files:**
-    - /middleware/pagination.js
     - /routes/video.js 
 
 ### Use of external API(s)
 
-- **One line description**: Integration with an external API to fetch related video metadata.
-- **Video timestamp:** 1:00
-- **Relevant files:**
-    - /routes/apiIntegration.js
+- **One line description**: Not implemented in this project
+- **Video timestamp:** N/A
+- **Relevant files:** N/A
 
 ### Extensive web client features
 
 - **One line description**: Advanced web client features include video previews, format selection, and live progress updates.
-- **Video timestamp:** 1:30
+- **Video timestamp:** 1:10
 - **Relevant files:**
     - /public/upload.html 
 
 ### Live progress indication
 
 - **One line description**: The client polls the server for progress updates during video transcoding, updating the UI in real-time.
-- **Video timestamp:** 3:00
+- **Video timestamp:** 1:10
 - **Relevant files:**
     - /routes/video.js 
     - /public/upload.html 
 
 ### Infrastructure as code
 
-- **One line description**: Docker Compose is used to manage application and database containers.
-- **Video timestamp:** 0:25
+- **One line description**: Docker is used to manually manage the application and database containers without using Docker Compose.
+- **Video timestamp:** 0:00
 - **Relevant files:**
-    - /docker-compose.yml
+    - Dockerfile
