@@ -16,6 +16,8 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
+
+ENV MONGODB_URL="mongodb+srv://xinyuqian1231:drcNf24jIcvctrrX@cluster0.tfta3j2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 # Expose the port the app runs on
 EXPOSE 3000
 
