@@ -5,6 +5,7 @@ const session = require('express-session');
 const mongoose = require('mongoose');
 const authRoutes = require('./routes/auth');
 const uploadRoutes = require('./routes/upload');
+require('dotenv').config();
 
 // Load environment variables from .env
 require('dotenv').config();
@@ -26,7 +27,10 @@ app.set('view engine', 'ejs');
 
 // Serve static files from the "public" directory
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/auth', authRoutes);  // All authentication routes (signup, login, etc.)
+app.use('/upload', uploadRoutes);  // All upload-related routes
+
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -34,6 +38,7 @@ app.use(session({
     secret: 'your-secret-key',
     resave: false,
     saveUninitialized: true,
+    cookie: { secure: false }  // Set to true if using HTTPS
 }));
 
 // Routes

@@ -3,23 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
+    <title>Choose Action</title>
     <link rel="stylesheet" href="/styles.css">
-
 </head>
 <body>
     <div class="login-container">
-        <h1>Login</h1>
-        <form id="loginForm" action="/login" method="POST">
-            <% if (errorMessage) { %>
-                <div id="error-message" style="color: red;"><%= errorMessage %></div>
-            <% } %>
-            <label for="username">Username:</label>
-            <input type="text" id="username" name="username" required><br><br>
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required><br><br>
-            <button class="button-64" role="button" type="submit"><span class="text">Login</span></button>
-        </form>
+        <h1>Welcome to My App</h1>
+        <p>Please choose an option:</p>
+
+        <button onclick="window.location.href='/signup'" class="button-64"><span>Sign Up</span></button>
+        <br><br>
+        <button onclick="window.location.href='/login'" class="button-64"><span>Login</span></button>
     </div>
+    
 </body>
 </html>
