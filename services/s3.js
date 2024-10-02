@@ -1,9 +1,9 @@
-const S3 = require("@aws-sdk/client-s3");
-const S3Presigner = require("@aws-sdk/s3-request-presigner");
+const { S3Client, CreateBucketCommand, PutBucketTaggingCommand, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 // Configuration variables
-const bucketName = 'your-unique-bucket-name';
-const qutUsername = 'your-username@qut.edu.au';
+const bucketName = 'n10366687-assignment';
+const qutUsername = 'n10366687@qut.edu.au';
 const purpose = 'prac';
 const objectKey = 'myAwesomeObjectKey';
 const objectValue = 'This could be just about anything.';
@@ -11,11 +11,11 @@ const objectValue = 'This could be just about anything.';
 // Main function to interact with S3
 async function main() {
     // Create an S3 client
-    const s3Client = new S3.S3Client({ region: 'ap-southeast-2' });
+    const s3Client = new S3Client({ region: 'ap-southeast-2' });
 
     // Create a new bucket
     try {
-        const createBucketCommand = new S3.CreateBucketCommand({ Bucket: bucketName });
+        const createBucketCommand = new CreateBucketCommand({ Bucket: bucketName });
         const response = await s3Client.send(createBucketCommand);
         console.log('Bucket created at:', response.Location);
     } catch (err) {
@@ -29,7 +29,7 @@ async function main() {
 
     // Tag the S3 bucket
     try {
-        const tagBucketCommand = new S3.PutBucketTaggingCommand({
+        const tagBucketCommand = new PutBucketTaggingCommand({
             Bucket: bucketName,
             Tagging: {
                 TagSet: [
@@ -47,7 +47,7 @@ async function main() {
 
     // Write an object to the bucket
     try {
-        const putObjectCommand = new S3.PutObjectCommand({
+        const putObjectCommand = new PutObjectCommand({
             Bucket: bucketName,
             Key: objectKey,
             Body: objectValue
@@ -61,7 +61,7 @@ async function main() {
 
     // Read the object from the bucket
     try {
-        const getObjectCommand = new S3.GetObjectCommand({
+        const getObjectCommand = new GetObjectCommand({
             Bucket: bucketName,
             Key: objectKey
         });
@@ -75,8 +75,8 @@ async function main() {
 
     // Generate a pre-signed URL to access the object
     try {
-        const getCommand = new S3.GetObjectCommand({ Bucket: bucketName, Key: objectKey });
-        const presignedURL = await S3Presigner.getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+        const getCommand = new GetObjectCommand({ Bucket: bucketName, Key: objectKey });
+        const presignedURL = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
         console.log('Pre-signed URL for object:', presignedURL);
     } catch (err) {
         console.log('Error generating pre-signed URL:', err);

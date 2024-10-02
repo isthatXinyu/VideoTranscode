@@ -5,6 +5,7 @@ const session = require('express-session');
 const mongoose = require('mongoose');
 const authRoutes = require('./routes/auth');
 const uploadRoutes = require('./routes/upload');
+const cookieParser = require('cookie-parser'); // JWT token
 require('dotenv').config();
 
 // Load environment variables from .env
@@ -34,11 +35,12 @@ app.use('/upload', uploadRoutes);  // All upload-related routes
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(session({
     secret: 'your-secret-key',
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false }  // Set to true if using HTTPS
+    cookie: { secure: true }  // Set to true if using HTTPS
 }));
 
 // Routes
