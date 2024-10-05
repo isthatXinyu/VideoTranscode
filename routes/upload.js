@@ -3,51 +3,13 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
-const Video = require('../models/video');  // Your video model
+const Video = require('../models/video');  // video model
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
-const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-
-// S3 Configuration
-const bucketName = 'n10366687-assignment';
-const s3Client = new S3Client({ region: 'ap-southeast-2' });
+const { main } = require('../s3');  // Import the main function from s3.js
 
 // Store file in memory
 const storage = multer.memoryStorage();  
-
-// Helper function to upload an object to S3
-async function uploadObject(objectKey, objectValue) {
-    try {
-        const putObjectCommand = new PutObjectCommand({
-            Bucket: bucketName,
-            Key: objectKey,
-            Body: objectValue,
-        });
-        const response = await s3Client.send(putObjectCommand);
-        console.log('Object uploaded:', response);
-        return response;
-    } catch (err) {
-        console.error('Error uploading object:', err);
-        throw err;
-    }
-}
-
-// Helper function to generate a pre-signed URL for the object in S3
-async function generatePresignedUrl(objectKey) {
-    try {
-        const getCommand = new GetObjectCommand({
-            Bucket: bucketName,
-            Key: objectKey,
-        });
-        const presignedURL = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
-        console.log('Pre-signed URL generated:', presignedURL);
-        return presignedURL;
-    } catch (err) {
-        console.error('Error generating pre-signed URL:', err);
-        throw err;
-    }
-}
 
 // Set up multer for file uploads
 const upload = multer({ storage: storage });
@@ -135,7 +97,7 @@ router.post('/upload', authenticateJWT, upload.single('video'), async (req, res)
   try {
     if (!req.file) {
       console.error('No file uploaded');
-      return res.status(400).send('No file uploaded.');
+      return res.status(400).json({ error: 'No file uploaded' });
     }
 
     console.log('File uploaded:', req.file.originalname);  // Log the file name to ensure Multer is processing it
@@ -144,22 +106,18 @@ router.post('/upload', authenticateJWT, upload.single('video'), async (req, res)
     const format = req.body.format;
     const resolution = req.body.resolution;
     const originalFilename = req.file.originalname;
-    const objectKey = `${Date.now()}_${originalFilename}`;
 
     if (!format || !resolution) {
-      return res.status(400).send('Format and resolution must be selected.');
+      return res.status(400).json({ error: 'Format and resolution must be selected.' });
     }
 
-    // Upload the original video to S3
-    await uploadObject(objectKey, req.file.buffer);  // No need to read from disk
-
-    // Generate a pre-signed URL for the uploaded video
-    const presignedUrl = await generatePresignedUrl(objectKey);
+    // Upload the original video to S3 and get a pre-signed URL
+    const presignedUrl = await main(req.file);
 
     // Create a new video document in the database
     const video = new Video({
       originalFilename: originalFilename,
-      s3Key: objectKey,
+      s3Key: req.file.originalname,
       format: format,
       resolution: resolution,
       status: 'processing',
@@ -168,16 +126,26 @@ router.post('/upload', authenticateJWT, upload.single('video'), async (req, res)
     const savedVideo = await video.save();
     console.log('Video document saved successfully:', savedVideo);
 
-    // Transcode the video 
+    // Transcode the video
     const tempPath = path.resolve(__dirname, '../uploads/', `${Date.now()}_${req.file.originalname}`);
-    fs.writeFileSync(tempPath, req.file.buffer);  // Write buffer to disk before transcoding
+    
+    // Write video buffer to disk for transcoding
+    try {
+      fs.writeFileSync(tempPath, req.file.buffer);
+      console.log('Video buffer written to disk successfully.');
+    } catch (fsError) {
+      console.error('Error writing video to disk:', fsError);
+      return res.status(500).json({ error: 'Error writing video to disk for transcoding: ' + fsError.message });
+    }
+
+    // Transcode the video
     transcodeVideo(tempPath, format, resolution, res, savedVideo._id, originalFilename);
 
     // Respond with the pre-signed URL
     res.json({ presignedUrl });
   } catch (err) {
     console.error('Error in upload route:', err);
-    res.status(500).send('Internal server error.');
+    return res.status(500).json({ error: 'Internal server error: ' + err.message });
   }
 });
 

@@ -47,6 +47,10 @@ app.use(session({
 app.use('/', authRoutes);
 app.use('/', uploadRoutes);
 
+// Change this to reflect your domain
+const DOMAIN = 'http://n10366687.cab432.com';
+
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
+    // console.log(`Server is running on ${DOMAIN}:${PORT}`);
 });
