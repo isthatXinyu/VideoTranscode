@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-// Original video schema
-const videoSchema = new mongoose.Schema({
+// Define the video schema
+const videoSchema = new Schema({
     originalFilename: String,
     transcodedFilename: String,  // Name of the transcoded file
     s3Key: String,               // S3 object key
@@ -22,12 +23,6 @@ const videoSchema = new mongoose.Schema({
 const Video = mongoose.model('Video', videoSchema);
 
 // Save video metadata to MongoDB
-// async function saveMetadataToMongo(fileName, s3Url) {
-//    const video = new Video({ fileName, s3Url });
-//    await video.save();
-//    console.log('Video metadata saved successfully.');
-// }
-
 const saveMetadataToMongo = async (fileName, s3Key, format, resolution, status = 'processing') => {
     const video = new Video({
         originalFilename: fileName,
@@ -59,4 +54,5 @@ const updateVideoStatus = async (videoId, status) => {
     }
 };
 
-module.exports = { saveMetadataToMongo, updateVideoStatus };
+// Export both the Video model and the helper functions
+module.exports = { Video, saveMetadataToMongo, updateVideoStatus };
