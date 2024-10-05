@@ -60,6 +60,7 @@
 
     <script>
         // Video Preview
+        // Video Preview
         const videoInput = document.getElementById('video');
         const videoPreview = document.getElementById('videoPreview');
 
@@ -85,11 +86,10 @@
             const progressText = document.getElementById('progress-text');
             const downloadContainer = document.getElementById('download-container');
             const downloadLink = document.getElementById('download-link');
-            const errorContainer = document.getElementById('error-container');
+            const errorMessage = document.getElementById('error-message');
 
-            // Clear previous error
-            errorContainer.style.display = 'none';
-            errorContainer.innerText = '';
+            // Clear any previous error message
+            if (errorMessage) errorMessage.innerText = '';
 
             // Show progress bar
             progressContainer.style.display = 'block';
@@ -108,12 +108,12 @@
                 const result = await response.json();
                 const presignedUrl = result.presignedUrl;
 
-                // Log and show the pre-signed URL
-                console.log("Pre-signed URL:", presignedUrl);
+                // Show download link for the transcoded video
                 downloadLink.href = presignedUrl;
                 downloadLink.textContent = 'Download Transcoded Video';
                 downloadContainer.style.display = 'block';
             } catch (error) {
+                console.error('Error uploading video:', error);
                 showError('Error: ' + error.message);
             }
         });
@@ -123,6 +123,8 @@
             errorContainer.style.display = 'block';
             errorContainer.innerText = message;
         }
+
+
         async function fetchVideoFromDatabase(videoId) {
             try {
                 const response = await fetch(`/video/${videoId}`);
@@ -143,8 +145,6 @@
                 showError('Error: ' + error.message);
             }
         }
-
-
     </script>
 </body>
 

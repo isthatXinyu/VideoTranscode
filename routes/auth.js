@@ -113,6 +113,10 @@ router.get('/change-password', (req, res) => {
     res.render('change-password', { username });
 });
 
+router.get('/signup', (req, res) => {
+    res.render('signup');  // Render the signup form
+});
+
 // Render login form
 router.get('/login', (req, res) => {
     res.render('login', { errorMessage: null });
