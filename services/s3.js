@@ -2,10 +2,10 @@ const { S3Client, CreateBucketCommand, PutBucketTaggingCommand, PutObjectCommand
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 // Configuration variables
-const bucketName = 'n10366687-assignment';
+const bucketName = 'n10366687-test';  
 const qutUsername = 'n10366687@qut.edu.au';
 const purpose = 'prac';
-const objectKey = 'myAwesomeObjectKey';
+const objectKey = 'uploads/myAwesomeObjectKey';  // Consider organizing objects into folders like 'uploads/'
 const objectValue = 'This could be just about anything.';
 
 // Main function to interact with S3
@@ -13,7 +13,7 @@ async function main() {
     // Create an S3 client
     const s3Client = new S3Client({ region: 'ap-southeast-2' });
 
-    // Create a new bucket
+    // Create a new bucket (this step only needs to be done once)
     try {
         const createBucketCommand = new CreateBucketCommand({ Bucket: bucketName });
         const response = await s3Client.send(createBucketCommand);
@@ -45,7 +45,7 @@ async function main() {
         return;
     }
 
-    // Write an object to the bucket
+    // Write an object to the bucket (this can be used for file uploads)
     try {
         const putObjectCommand = new PutObjectCommand({
             Bucket: bucketName,
@@ -73,10 +73,10 @@ async function main() {
         return;
     }
 
-    // Generate a pre-signed URL to access the object
+    // Generate a pre-signed URL to access the object (this allows temporary access to the file)
     try {
         const getCommand = new GetObjectCommand({ Bucket: bucketName, Key: objectKey });
-        const presignedURL = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+        const presignedURL = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });  // Expires in 1 hour
         console.log('Pre-signed URL for object:', presignedURL);
     } catch (err) {
         console.log('Error generating pre-signed URL:', err);

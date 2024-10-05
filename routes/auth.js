@@ -22,7 +22,7 @@ const idVerifier = jwt.CognitoJwtVerifier.create({
     clientId: clientId,
 });
 
-// Sign-up Route
+// Sign-up Route (no confirmation needed)
 router.post('/signup', async (req, res) => {
     const { username, password, email } = req.body;
 
@@ -35,34 +35,15 @@ router.post('/signup', async (req, res) => {
 
     try {
         const signUpResponse = await cognitoClient.send(signUpCommand);
-        res.redirect('/confirm');  // Redirect user to the email confirmation page
+        // Instead of redirecting to confirm, just notify the user to contact the admin for verification
+        res.send('Sign-up successful. Please contact the admin to verify your account.');
     } catch (err) {
         console.error('Sign-up failed', err);
-        res.render('signup', { errorMessage: 'Sign-up failed. Please try again.' });
+        res.status(400).send('Sign-up failed. Please try again.');
     }
 });
 
-
-// Email Confirmation Route
-router.post('/confirm', async (req, res) => {
-    const { username, confirmationCode } = req.body;
-
-    const confirmSignUpCommand = new Cognito.ConfirmSignUpCommand({
-        ClientId: clientId,
-        Username: username,
-        ConfirmationCode: confirmationCode,
-    });
-
-    try {
-        const confirmResponse = await cognitoClient.send(confirmSignUpCommand);
-        res.redirect('/login'); // Redirect user to login page after confirmation
-    } catch (err) {
-        console.error('Confirmation failed', err);
-        res.render('confirm', { errorMessage: 'Confirmation failed. Please try again.' });
-    }
-});
-
-// Login Route
+// Login Route (with NEW_PASSWORD_REQUIRED handling)
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -77,38 +58,69 @@ router.post('/login', async (req, res) => {
 
     try {
         const loginResponse = await cognitoClient.send(loginCommand);
-        const accessToken = await accessVerifier.verify(loginResponse.AuthenticationResult.AccessToken);
-        const idToken = await idVerifier.verify(loginResponse.AuthenticationResult.IdToken);
 
-        // Generate JWT token
-        const token = jwt.sign({ username }, jwtSecret, { expiresIn: '1h' });
+        // Handle NEW_PASSWORD_REQUIRED challenge
+        if (loginResponse.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
+            const session = loginResponse.Session; // Save this session for the next step
+            res.render('change-password', { username, session });
+        } else {
+            const accessToken = loginResponse.AuthenticationResult.AccessToken;
+            const idToken = loginResponse.AuthenticationResult.IdToken;
 
-        // Store JWT in cookie or send it as a response
-        res.cookie('token', token, { httpOnly: true }); // Use cookies or send token in response
-        res.redirect('/upload.html');  // Redirect to upload page
+            // Store tokens in session
+            req.session.accessToken = accessToken;
+            req.session.idToken = idToken;
+
+            res.redirect('/upload.html'); // Redirect after successful login
+        }
     } catch (err) {
-        console.error('Login failed', err);
+        console.error('Login failed:', err);
         res.render('login', { errorMessage: 'Login failed. Please check your username and password.' });
     }
 });
 
-// Render sign-up form
-router.get('/signup', (req, res) => {
-    res.render('signup'); // Make sure signup.ejs exists in the views folder
+
+// Handle new password submission
+router.post('/change-password', async (req, res) => {
+    const { username, newPassword, session } = req.body; // session should be passed via the form
+
+    try {
+        const respondToAuthChallengeCommand = new Cognito.RespondToAuthChallengeCommand({
+            ChallengeName: 'NEW_PASSWORD_REQUIRED',
+            ClientId: clientId,
+            ChallengeResponses: {
+                USERNAME: username,
+                NEW_PASSWORD: newPassword,
+            },
+            Session: session // Pass the session parameter
+        });
+
+        const response = await cognitoClient.send(respondToAuthChallengeCommand);
+
+        // If successful, redirect the user to the login page
+        console.log('Password change successful:', response);
+        res.redirect('/login');
+    } catch (err) {
+        console.error('Password change failed:', err);
+        res.render('change-password', { username, session, errorMessage: 'Failed to change password. Please try again.' });
+    }
+});
+
+
+// Render change-password form
+router.get('/change-password', (req, res) => {
+    const username = req.query.username;
+    res.render('change-password', { username });
 });
 
 // Render login form
 router.get('/login', (req, res) => {
-    res.render('login',{ errorMessage: null }); // Make sure login.ejs exists in the views folder
+    res.render('login', { errorMessage: null });
 });
 
-// Render confirmation page
-router.get('/confirm', (req, res) => {
-    res.render('confirm'); // Make sure confirm.ejs exists in the views folder
-});
-// Render login page (without error)
+// Render index page
 router.get('/', (req, res) => {
-    res.render('index', { errorMessage: null });  // Render without error message
+    res.render('index', { errorMessage: null });
 });
 
 module.exports = router;

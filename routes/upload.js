@@ -13,6 +13,10 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const bucketName = 'n10366687-assignment';
 const s3Client = new S3Client({ region: 'ap-southeast-2' });
 
+// Store file in memory
+const storage = multer.memoryStorage();  
+
+
 // Helper function to upload an object to S3
 async function uploadObject(objectKey, objectValue) {
     try {
@@ -47,17 +51,17 @@ async function generatePresignedUrl(objectKey) {
 }
 
 // Set up multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadPath = path.resolve(__dirname, '../uploads/');
-    cb(null, uploadPath);  // Directory where files will be uploaded
-  },
-  filename: function (req, file, cb) {
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    cb(null, `${timestamp}${ext}`);  // Use a unique timestamp filename
-  },
-});
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     const uploadPath = path.resolve(__dirname, '../uploads/');
+//     cb(null, uploadPath);  // Directory where files will be uploaded
+//   },
+//   filename: function (req, file, cb) {
+//     const timestamp = Date.now();
+//     const ext = path.extname(file.originalname);
+//     cb(null, `${timestamp}${ext}`);  // Use a unique timestamp filename
+//   },
+// });
 
 const upload = multer({ storage: storage });
 
@@ -141,29 +145,23 @@ const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFil
     .run();
 };
 
-// Upload Route
 router.post('/upload', authenticateJWT, upload.single('video'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).send('No file uploaded.');
     }
 
-    const inputPath = req.file.path;
     const format = req.body.format;
     const resolution = req.body.resolution;
     const originalFilename = req.file.originalname;
     const objectKey = `${Date.now()}_${originalFilename}`;
 
     if (!format || !resolution) {
-      fs.unlink(inputPath, (err) => {
-        if (err) console.error('Error deleting file after missing parameters:', err);
-      });
       return res.status(400).send('Format and resolution must be selected.');
     }
 
     // Upload the original video to S3
-    const fileBuffer = fs.readFileSync(inputPath);  // Read file contents
-    await uploadObject(objectKey, fileBuffer);      // Upload to S3
+    await uploadObject(objectKey, req.file.buffer);  // No need to read from disk
 
     // Generate a pre-signed URL for the uploaded video
     const presignedUrl = await generatePresignedUrl(objectKey);
@@ -171,7 +169,6 @@ router.post('/upload', authenticateJWT, upload.single('video'), async (req, res)
     // Create a new video document in the database
     const video = new Video({
       originalFilename: originalFilename,
-      filePath: inputPath,
       s3Key: objectKey,
       format: format,
       resolution: resolution,
@@ -182,7 +179,7 @@ router.post('/upload', authenticateJWT, upload.single('video'), async (req, res)
     console.log('Video document saved successfully:', savedVideo);
 
     // Transcode the video (optional, based on your logic)
-    transcodeVideo(inputPath, format, resolution, res, savedVideo._id, originalFilename);
+    // If needed, call the transcode function and handle progress
 
     // Respond with the pre-signed URL
     res.json({ presignedUrl });
@@ -191,6 +188,7 @@ router.post('/upload', authenticateJWT, upload.single('video'), async (req, res)
     res.status(500).send('Internal server error.');
   }
 });
+
 
 // Route to download a video using the pre-signed URL
 router.get('/download', authenticateJWT, async (req, res) => {
