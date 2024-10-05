@@ -16,7 +16,6 @@ const s3Client = new S3Client({ region: 'ap-southeast-2' });
 // Store file in memory
 const storage = multer.memoryStorage();  
 
-
 // Helper function to upload an object to S3
 async function uploadObject(objectKey, objectValue) {
     try {
@@ -51,18 +50,6 @@ async function generatePresignedUrl(objectKey) {
 }
 
 // Set up multer for file uploads
-// const storage = multer.diskStorage({
-//   destination: function (req, file, cb) {
-//     const uploadPath = path.resolve(__dirname, '../uploads/');
-//     cb(null, uploadPath);  // Directory where files will be uploaded
-//   },
-//   filename: function (req, file, cb) {
-//     const timestamp = Date.now();
-//     const ext = path.extname(file.originalname);
-//     cb(null, `${timestamp}${ext}`);  // Use a unique timestamp filename
-//   },
-// });
-
 const upload = multer({ storage: storage });
 
 let currentProgress = 0;
@@ -87,7 +74,7 @@ function authenticateJWT(req, res, next) {
   }
 }
 
-// Transcoding video logic (optional, adjust based on your app logic)
+// Transcoding video logic (adjust based on app logic)
 const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFilename) => {
   const outputFilename = `${path.basename(inputPath, path.extname(inputPath))}_${resolution}p.${format}`;
   const outputPath = path.resolve(__dirname, '../uploads/', outputFilename);
@@ -131,8 +118,6 @@ const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFil
     })
     .on('error', async (err) => {
       console.error(`Transcoding error: ${err.message}`);
-
-      // Update the video document with error status
       try {
         await Video.findByIdAndUpdate(videoId, { status: 'failed' });
         console.log('Video document updated with failed status.');
@@ -145,12 +130,17 @@ const transcodeVideo = (inputPath, format, resolution, res, videoId, originalFil
     .run();
 };
 
+// Upload Route
 router.post('/upload', authenticateJWT, upload.single('video'), async (req, res) => {
   try {
     if (!req.file) {
+      console.error('No file uploaded');
       return res.status(400).send('No file uploaded.');
     }
 
+    console.log('File uploaded:', req.file.originalname);  // Log the file name to ensure Multer is processing it
+    console.log('File buffer size:', req.file.buffer.length); // Check the buffer size
+  
     const format = req.body.format;
     const resolution = req.body.resolution;
     const originalFilename = req.file.originalname;
@@ -178,8 +168,10 @@ router.post('/upload', authenticateJWT, upload.single('video'), async (req, res)
     const savedVideo = await video.save();
     console.log('Video document saved successfully:', savedVideo);
 
-    // Transcode the video (optional, based on your logic)
-    // If needed, call the transcode function and handle progress
+    // Transcode the video 
+    const tempPath = path.resolve(__dirname, '../uploads/', `${Date.now()}_${req.file.originalname}`);
+    fs.writeFileSync(tempPath, req.file.buffer);  // Write buffer to disk before transcoding
+    transcodeVideo(tempPath, format, resolution, res, savedVideo._id, originalFilename);
 
     // Respond with the pre-signed URL
     res.json({ presignedUrl });
@@ -188,7 +180,6 @@ router.post('/upload', authenticateJWT, upload.single('video'), async (req, res)
     res.status(500).send('Internal server error.');
   }
 });
-
 
 // Route to download a video using the pre-signed URL
 router.get('/download', authenticateJWT, async (req, res) => {
