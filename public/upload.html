@@ -86,13 +86,25 @@
             const progressText = document.getElementById('progress-text');
             const downloadContainer = document.getElementById('download-container');
             const downloadLink = document.getElementById('download-link');
-            const errorMessage = document.getElementById('error-message');
+            const errorMessage = document.getElementById('error-container');
 
             // Clear any previous error message
             if (errorMessage) errorMessage.innerText = '';
 
             // Show progress bar
             progressContainer.style.display = 'block';
+
+            // Start listening to progress updates using EventSource
+            const eventSource = new EventSource('/progress');
+            eventSource.onmessage = function (event) {
+                const percent = event.data;
+                progressBar.value = percent;
+                progressText.innerText = `${percent}%`;
+
+                if (percent >= 100) {
+                    eventSource.close(); // Stop receiving updates when progress is complete
+                }
+            };
 
             try {
                 const response = await fetch('/upload', {
