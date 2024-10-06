@@ -120,7 +120,6 @@ router.post('/upload', upload.single('video'), async (req, res) => {
 
 // Video transcoding function using ffmpeg
 const { PassThrough } = require('stream');
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 // Video transcoding function using ffmpeg
 const transcodeVideo = (inputPath, format, resolution, videoId, res) => {
@@ -129,9 +128,6 @@ const transcodeVideo = (inputPath, format, resolution, videoId, res) => {
   
   // Use PassThrough stream to pipe the transcoded video directly to S3
   const passThrough = new PassThrough();
-
-  // Create the S3 client
-  const s3Client = new S3Client({ region: 'ap-southeast-2' });
 
   // Upload the transcoded stream to S3
   const uploadToS3 = async (s3Key, stream) => {
