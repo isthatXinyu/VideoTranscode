@@ -12,7 +12,7 @@ require('dotenv').config();
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 80;
 
 // MongoDB connection using Mongoose
 // develped with guidance of mongodb.com
