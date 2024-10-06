@@ -50,7 +50,7 @@ app.use('/', uploadRoutes);
 // Change this to reflect your domain
 const DOMAIN = 'http://n10366687.cab432.com';
 
+// Update the app to log the correct domain and port
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-    // console.log(`Server is running on ${DOMAIN}:${PORT}`);
+    console.log(`Server is running on ${DOMAIN}:${PORT}`);
 });
