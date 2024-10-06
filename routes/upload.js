@@ -119,73 +119,96 @@ router.post('/upload', upload.single('video'), async (req, res) => {
 });
 
 // Video transcoding function using ffmpeg
+const { PassThrough } = require('stream');
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+
+// Video transcoding function using ffmpeg
 const transcodeVideo = (inputPath, format, resolution, videoId, res) => {
   const outputFilename = `${path.basename(inputPath, path.extname(inputPath))}_${resolution}p.${format}`;
-  const outputPath = path.resolve(__dirname, '../uploads/', outputFilename);
+  const transcodedObjectKey = `transcoded/${outputFilename}`;
+  
+  // Use PassThrough stream to pipe the transcoded video directly to S3
+  const passThrough = new PassThrough();
 
+  // Create the S3 client
+  const s3Client = new S3Client({ region: 'ap-southeast-2' });
+
+  // Upload the transcoded stream to S3
+  const uploadToS3 = async (s3Key, stream) => {
+    const params = {
+      Bucket: bucketName,
+      Key: s3Key,
+      Body: stream,
+      ContentType: `video/${format}`,
+    };
+
+    try {
+      const response = await s3Client.send(new PutObjectCommand(params));
+      console.log(`Transcoded video uploaded to S3 with key: ${s3Key}`);
+      return response;
+    } catch (err) {
+      console.error('Error uploading transcoded video to S3:', err);
+      throw err;
+    }
+  };
+
+  // Start the ffmpeg process and stream directly to S3
   ffmpeg(inputPath)
-      .output(outputPath)
-      .outputOptions([
-          '-c:v libx264',
-          `-vf scale=-2:${resolution}`,
-          '-preset fast',
-          '-crf 23'
-      ])
-      .on('start', (commandLine) => {
-          console.log('FFmpeg process started with command:', commandLine);
-      })
-      .on('progress', (progress) => {
-          currentProgress = progress.percent.toFixed(2);
-          console.log(`Processing: ${currentProgress}% done`);
-      })
-      .on('end', async () => {
-          currentProgress = 100;
-          console.log('Transcoding completed.');
+    .output(passThrough)
+    .outputOptions([
+      '-c:v libx264',
+      `-vf scale=-2:${resolution}`,
+      '-preset fast',
+      '-crf 23'
+    ])
+    .on('start', (commandLine) => {
+      console.log('FFmpeg process started with command:', commandLine);
+    })
+    .on('progress', (progress) => {
+      currentProgress = progress.percent.toFixed(2);
+      console.log(`Processing: ${currentProgress}% done`);
+    })
+    .on('end', async () => {
+      currentProgress = 100;
+      console.log('Transcoding completed.');
 
-          // Upload the transcoded video to S3
-          const transcodedObjectKey = `transcoded/${outputFilename}`;
-          const transcodedFileBuffer = fs.readFileSync(outputPath);
+      try {
+        // Wait for the S3 upload to complete
+        await uploadToS3(transcodedObjectKey, passThrough);
 
-          try {
-              await uploadObject(transcodedObjectKey, transcodedFileBuffer);
-              console.log(`Transcoded video uploaded to S3 with key: ${transcodedObjectKey}`);
+        // Generate a new pre-signed URL for the transcoded video
+        const transcodedPresignedUrl = await generatePresignedUrl(transcodedObjectKey);
 
-              // Generate a new pre-signed URL for the transcoded video
-              const transcodedPresignedUrl = await generatePresignedUrl(transcodedObjectKey);
+        // Update the video document in MongoDB with the S3 key of the transcoded file
+        await Video.findByIdAndUpdate(videoId, {
+          transcodedFilename: outputFilename,
+          s3Key: transcodedObjectKey, // Save the new S3 key for the transcoded file
+          status: 'completed'
+        });
 
-              // Update the video document in MongoDB with the S3 key of the transcoded file
-              await Video.findByIdAndUpdate(videoId, {
-                  transcodedFilename: outputFilename,
-                  s3Key: transcodedObjectKey,  // Save the new S3 key for the transcoded file
-                  status: 'completed'
-              });
+        // Respond with the pre-signed URL for the transcoded file
+        res.json({ presignedUrl: transcodedPresignedUrl });
+      } catch (err) {
+        console.error('Error uploading transcoded video to S3:', err);
+        await Video.findByIdAndUpdate(videoId, { status: 'failed' });
+        res.status(500).send('Error uploading transcoded video to S3.');
+      }
 
-              // Delete the local transcoded file
-              fs.unlink(outputPath, (err) => {
-                  if (err) console.error('Error deleting transcoded file:', err);
-                  else console.log('Transcoded file deleted from local storage.');
-              });
+      // Delete the original input file
+      fs.unlink(inputPath, (err) => {
+        if (err) console.error('Error deleting original file:', err);
+        else console.log('Original file deleted.');
+      });
+    })
+    .on('error', async (err) => {
+      console.error('Error during transcoding:', err);
+      await Video.findByIdAndUpdate(videoId, { status: 'failed' });
+      res.status(500).send('Error during transcoding.');
+    })
+    .run();
 
-              // Respond with the pre-signed URL for the transcoded file
-              res.json({ presignedUrl: transcodedPresignedUrl });
-          } catch (err) {
-              console.error('Error uploading transcoded video to S3:', err);
-              await Video.findByIdAndUpdate(videoId, { status: 'failed' });
-              res.status(500).send('Error uploading transcoded video to S3.');
-          }
-
-          // Delete the original input file
-          fs.unlink(inputPath, (err) => {
-              if (err) console.error('Error deleting original file:', err);
-              else console.log('Original file deleted.');
-          });
-      })
-      .on('error', async (err) => {
-          console.error('Error during transcoding:', err);
-          await Video.findByIdAndUpdate(videoId, { status: 'failed' });
-          res.status(500).send('Error during transcoding.');
-      })
-      .run();
+  // Stream the transcoded output to S3 while tracking progress
+  uploadToS3(transcodedObjectKey, passThrough);
 };
 
 // Progress tracking route for Server-Sent Events (SSE)
