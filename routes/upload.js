@@ -3,16 +3,14 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
-const { Video, saveMetadataToMongo, updateVideoStatus } = require('../models/video');
+const { Video, saveMetadataToMongo, updateVideoStatus } = require('../models/video');  // Correctly import Video and functions
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
-const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const { uploadToS3, generatePresignedUrl } = require('../s3');
 
-const bucketName = 'n10366687-test';  
-const s3Client = new S3Client({ region: 'ap-southeast-2' });
+const bucketName = 'n10366687-test';
 
-// Set up multer for file uploads (in-memory storage)
+// Set up multer for file uploads (in memory storage)
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
@@ -20,7 +18,7 @@ const upload = multer({ storage });
 function authenticateJWT(req, res, next) {
     const token = req.cookies.token || req.headers.authorization;
     if (token) {
-        jwt.verify(token, 'your-jwt-secret', (err, user) => {
+        jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
             if (err) {
                 return res.status(403).send('Forbidden');
             }
@@ -32,44 +30,11 @@ function authenticateJWT(req, res, next) {
     }
 }
 
-// Helper function to upload an object to S3
-async function uploadObject(objectKey, objectValue) {
-    try {
-        const putObjectCommand = new PutObjectCommand({
-            Bucket: bucketName,
-            Key: objectKey,
-            Body: objectValue,
-        });
-        const response = await s3Client.send(putObjectCommand);
-        console.log('Object uploaded:', response);
-        return response;
-    } catch (err) {
-        console.error('Error uploading object:', err);
-        throw err;
-    }
-}
-
-// Helper function to generate a pre-signed URL for the object in S3
-async function generatePresignedUrl(objectKey) {
-    try {
-        const getCommand = new GetObjectCommand({
-            Bucket: bucketName,
-            Key: objectKey,
-        });
-        const presignedURL = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
-        console.log('Pre-signed URL generated:', presignedURL);
-        return presignedURL;
-    } catch (err) {
-        console.error('Error generating pre-signed URL:', err);
-        throw err;
-    }
-}
-
 // Progress tracking variable
 let currentProgress = 0;
 
-// Inside the POST /upload route after the video is saved to MongoDB, add authenticateJWT
-router.post('/upload', upload.single('video'), async (req, res) => {
+// Inside the POST /upload route after the video is saved to MongoDB
+router.post('/upload', authenticateJWT, upload.single('video'), async (req, res) => {
   try {
       if (!req.file) {
           console.error('No file uploaded');
@@ -89,7 +54,7 @@ router.post('/upload', upload.single('video'), async (req, res) => {
       }
 
       // Upload video buffer to S3
-      const s3Response = await uploadObject(objectKey, req.file.buffer);
+      await uploadToS3(objectKey, req.file.buffer);
       console.log(`Video uploaded to S3 with key: ${objectKey}`);
 
       // Create a new video document in the database
@@ -119,112 +84,99 @@ router.post('/upload', upload.single('video'), async (req, res) => {
 });
 
 // Video transcoding function using ffmpeg
-const { PassThrough } = require('stream');
-
-// Video transcoding function using ffmpeg
 const transcodeVideo = (inputPath, format, resolution, videoId, res) => {
   const outputFilename = `${path.basename(inputPath, path.extname(inputPath))}_${resolution}p.${format}`;
-  const transcodedObjectKey = `transcoded/${outputFilename}`;
-  
-  // Use PassThrough stream to pipe the transcoded video directly to S3
-  const passThrough = new PassThrough();
+  const outputPath = path.resolve(__dirname, '../uploads/', outputFilename);
 
-  // Upload the transcoded stream to S3
-  const uploadToS3 = async (s3Key, stream) => {
-    const params = {
-      Bucket: bucketName,
-      Key: s3Key,
-      Body: stream,
-      ContentType: `video/${format}`,
-    };
-
-    try {
-      const response = await s3Client.send(new PutObjectCommand(params));
-      console.log(`Transcoded video uploaded to S3 with key: ${s3Key}`);
-      return response;
-    } catch (err) {
-      console.error('Error uploading transcoded video to S3:', err);
-      throw err;
-    }
-  };
-
-  // Start the ffmpeg process and stream directly to S3
   ffmpeg(inputPath)
-    .output(passThrough)
-    .outputOptions([
-      '-c:v libx264',
-      `-vf scale=-2:${resolution}`,
-      '-preset fast',
-      '-crf 23'
-    ])
-    .on('start', (commandLine) => {
-      console.log('FFmpeg process started with command:', commandLine);
-    })
-    .on('progress', (progress) => {
-      currentProgress = progress.percent.toFixed(2);
-      console.log(`Processing: ${currentProgress}% done`);
-    })
-    .on('end', async () => {
-      currentProgress = 100;
-      console.log('Transcoding completed.');
+      .output(outputPath)
+      .outputOptions([
+          '-c:v libx264',
+          `-vf scale=-2:${resolution}`,
+          '-preset fast',
+          '-crf 23'
+      ])
+      .on('start', (commandLine) => {
+          console.log('FFmpeg process started with command:', commandLine);
+      })
+      .on('progress', (progress) => {
+          currentProgress = progress.percent.toFixed(2);
+          console.log(`Processing: ${currentProgress}% done`);
+      })
+      .on('end', async () => {
+          currentProgress = 100;
+          console.log('Transcoding completed.');
 
-      try {
-        // Wait for the S3 upload to complete
-        await uploadToS3(transcodedObjectKey, passThrough);
+          // Upload the transcoded video to S3
+          const transcodedObjectKey = `transcoded/${outputFilename}`;
+          const transcodedFileBuffer = fs.readFileSync(outputPath);
 
-        // Generate a new pre-signed URL for the transcoded video
-        const transcodedPresignedUrl = await generatePresignedUrl(transcodedObjectKey);
+          try {
+              await uploadToS3(transcodedObjectKey, transcodedFileBuffer);
+              console.log(`Transcoded video uploaded to S3 with key: ${transcodedObjectKey}`);
 
-        // Update the video document in MongoDB with the S3 key of the transcoded file
-        await Video.findByIdAndUpdate(videoId, {
-          transcodedFilename: outputFilename,
-          s3Key: transcodedObjectKey, // Save the new S3 key for the transcoded file
-          status: 'completed'
-        });
+              // Generate a new pre-signed URL for the transcoded video
+              const transcodedPresignedUrl = await generatePresignedUrl(transcodedObjectKey);
 
-        // Respond with the pre-signed URL for the transcoded file
-        res.json({ presignedUrl: transcodedPresignedUrl });
-      } catch (err) {
-        console.error('Error uploading transcoded video to S3:', err);
-        await Video.findByIdAndUpdate(videoId, { status: 'failed' });
-        res.status(500).send('Error uploading transcoded video to S3.');
-      }
+              // Update the video document in MongoDB with the S3 key of the transcoded file
+              await Video.findByIdAndUpdate(videoId, {
+                  transcodedFilename: outputFilename,
+                  s3Key: transcodedObjectKey,  // Save the new S3 key for the transcoded file
+                  status: 'completed'
+              });
 
-      // Delete the original input file
-      fs.unlink(inputPath, (err) => {
-        if (err) console.error('Error deleting original file:', err);
-        else console.log('Original file deleted.');
-      });
-    })
-    .on('error', async (err) => {
-      console.error('Error during transcoding:', err);
-      await Video.findByIdAndUpdate(videoId, { status: 'failed' });
-      res.status(500).send('Error during transcoding.');
-    })
-    .run();
+              // Delete the local transcoded file
+              fs.unlink(outputPath, (err) => {
+                  if (err) console.error('Error deleting transcoded file:', err);
+                  else console.log('Transcoded file deleted from local storage.');
+              });
 
-  // Stream the transcoded output to S3 while tracking progress
-  uploadToS3(transcodedObjectKey, passThrough);
+              // Respond with the pre-signed URL for the transcoded file
+              res.json({ presignedUrl: transcodedPresignedUrl });
+          } catch (err) {
+              console.error('Error uploading transcoded video to S3:', err);
+              await Video.findByIdAndUpdate(videoId, { status: 'failed' });
+              res.status(500).send('Error uploading transcoded video to S3.');
+          }
+
+          // Delete the original input file
+          fs.unlink(inputPath, (err) => {
+              if (err) console.error('Error deleting original file:', err);
+              else console.log('Original file deleted.');
+          });
+      })
+      .on('error', async (err) => {
+          console.error('Error during transcoding:', err);
+          await Video.findByIdAndUpdate(videoId, { status: 'failed' });
+          res.status(500).send('Error during transcoding.');
+      })
+      .run();
 };
 
-// Progress tracking route for Server-Sent Events (SSE)
+// Set up the SSE route
 router.get('/progress', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders(); // Flush the headers to establish SSE connection
-  
-    // Send progress updates every second
-    const intervalId = setInterval(() => {
-      res.write(`data: ${currentProgress}\n\n`); // Send the current progress
-    }, 1000);
-  
+    res.flushHeaders(); // flush the headers to establish SSE connection
+
+    const interval = setInterval(() => {
+        res.write(`data: ${JSON.stringify({ progress: currentProgress })}\n\n`);
+        
+        // When progress reaches 100%, stop the interval and close the connection
+        if (currentProgress >= 100) {
+            clearInterval(interval);
+            res.end();
+        }
+    }, 1000); // Update every second
+
+    // Clean up if the client closes the connection
     req.on('close', () => {
-      clearInterval(intervalId); // Stop sending progress when connection is closed
-      res.end();
+        clearInterval(interval);
+        res.end();
     });
-  });
-  
+});
+
 // Route to download the transcoded video
 router.get('/download/:id', async (req, res) => {
   try {

@@ -60,7 +60,6 @@
 
     <script>
         // Video Preview
-        // Video Preview
         const videoInput = document.getElementById('video');
         const videoPreview = document.getElementById('videoPreview');
 
@@ -97,7 +96,7 @@
             // Start listening to progress updates using EventSource
             const eventSource = new EventSource('/progress');
             eventSource.onmessage = function (event) {
-                const percent = event.data;
+                const percent = JSON.parse(event.data).progress;
                 progressBar.value = percent;
                 progressText.innerText = `${percent}%`;
 
@@ -134,28 +133,6 @@
             const errorContainer = document.getElementById('error-container');
             errorContainer.style.display = 'block';
             errorContainer.innerText = message;
-        }
-
-
-        async function fetchVideoFromDatabase(videoId) {
-            try {
-                const response = await fetch(`/video/${videoId}`);
-                if (!response.ok) {
-                    throw new Error('Error fetching video from database');
-                }
-
-                const data = await response.json();
-                console.log('Pre-signed URL:', data.presignedUrl);
-
-                // Now, you can use this URL for download or display
-                const downloadLink = document.getElementById('download-link');
-                downloadLink.href = data.presignedUrl;
-                downloadLink.textContent = 'Download Transcoded Video';
-                document.getElementById('download-container').style.display = 'block';
-            } catch (error) {
-                console.error('Error fetching video from database:', error);
-                showError('Error: ' + error.message);
-            }
         }
     </script>
 </body>

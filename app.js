@@ -13,6 +13,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+// const PORT = process.env.PORT || 3000;
 
 // MongoDB connection using Mongoose
 // develped with guidance of mongodb.com
@@ -54,3 +55,6 @@ const DOMAIN = 'http://n10366687.cab432.com';
 app.listen(PORT, () => {
     console.log(`Server is running on ${DOMAIN}:${PORT}`);
 });
+// app.listen(PORT, () => {
+//     console.log(`Server is running on http://localhost:${PORT}`);
+// });
