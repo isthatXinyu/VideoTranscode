@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Video</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="upload-container">
+        <h1>Welcome</h1>
+        <h1>Upload Video</h1>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <label for="video">Choose a video file:</label>
+            <input type="file" id="video" name="video" accept="video/*" required><br><br>
+
+            <!-- Video Preview -->
+            <label for="videoPreview">Video Preview:</label><br>
+            <video id="videoPreview" width="100%" controls style="display:none;">
+                Your browser does not support the video tag.
+            </video><br><br>
+
+            <label for="formats">Select output format:</label><br>
+            <input type="radio" id="mp4" name="format" value="mp4" required>
+            <label for="mp4">MP4</label><br>
+            <input type="radio" id="avi" name="format" value="avi" required>
+            <label for="avi">AVI</label><br>
+            <input type="radio" id="webm" name="format" value="webm" required>
+            <label for="webm">WebM</label><br><br>
+
+            <label for="resolutions">Select output resolution:</label><br>
+            <input type="radio" id="1080p" name="resolution" value="1080" required>
+            <label for="1080p">1080p</label><br>
+            <input type="radio" id="720p" name="resolution" value="720" required>
+            <label for="720p">720p</label><br>
+            <input type="radio" id="480p" name="resolution" value="480" required>
+            <label for="480p">480p</label><br><br>
+
+            <button type="submit" class="button-64">Submit</button>
+        </form>
+
+        <!-- Progress bar -->
+        <div id="progress-container" style="display:none;">
+            <label for="progress">Transcoding Progress:</label>
+            <progress id="progress" value="0" max="100" style="width: 100%;"></progress>
+            <span id="progress-text">0%</span>
+        </div>
+
+        <!-- Download link -->
+        <div id="download-container" style="display:none;">
+            <h3>Transcoding Completed! Download your video:</h3>
+            <a id="download-link" href="#" download>Download Transcoded Video</a>
+        </div>
+
+        <!-- Error message container -->
+        <div id="error-container" style="color: red; display: none;"></div>
+    </div>
+
+    <script>
+        // JavaScript code for handling video preview, form submission, and progress updates
+        const videoInput = document.getElementById('video');
+        const videoPreview = document.getElementById('videoPreview');
+
+        videoInput.addEventListener('change', function () {
+            const file = this.files[0];
+            if (file) {
+                const fileURL = URL.createObjectURL(file);
+                videoPreview.src = fileURL;
+                videoPreview.style.display = 'block';
+            } else {
+                videoPreview.style.display = 'none';
+                videoPreview.src = '';
+            }
+        });
+
+        const form = document.getElementById('uploadForm');
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            const formData = new FormData(form);
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress');
+            const progressText = document.getElementById('progress-text');
+            const downloadContainer = document.getElementById('download-container');
+            const downloadLink = document.getElementById('download-link');
+            const errorMessage = document.getElementById('error-container');
+
+            if (errorMessage) errorMessage.innerText = '';
+
+            // Show progress bar
+            progressContainer.style.display = 'block';
+
+            const eventSource = new EventSource('/progress');
+            eventSource.onmessage = function (event) {
+                const percent = JSON.parse(event.data).progress;
+                progressBar.value = percent;
+                progressText.innerText = `${percent}%`;
+
+                if (percent >= 100) {
+                    eventSource.close(); 
+                }
+            };
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Unknown error occurred');
+                }
+
+                const result = await response.json();
+                const presignedUrl = result.presignedUrl;
+
+                downloadLink.href = presignedUrl;
+                downloadLink.textContent = 'Download Transcoded Video';
+                downloadContainer.style.display = 'block';
+            } catch (error) {
+                console.error('Error uploading video:', error);
+                showError('Error: ' + error.message);
+            }
+        });
+
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.style.display = 'block';
+            errorContainer.innerText = message;
+        }
+    </script>
+</body>
+</html>
